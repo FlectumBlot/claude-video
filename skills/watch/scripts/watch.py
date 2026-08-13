@@ -7,6 +7,7 @@ then Reads each frame path to see the video.
 from __future__ import annotations
 
 import argparse
+import os
 import sys
 import tempfile
 from pathlib import Path
@@ -65,6 +66,35 @@ def main() -> int:
         action="store_true",
         help="Disable near-duplicate frame removal. Keeps visually identical "
              "frames (static screen recordings, held slides) instead of collapsing them.",
+    )
+    ap.add_argument(
+        "--backend",
+        choices=["claude", "ollama"],
+        default="claude",
+        help="Comprehension backend. 'claude' (default): print frame paths for the agent to "
+             "Read and reason over. 'ollama': send frames + transcript to a local Ollama vision "
+             "model and print its answer directly (batch/offline/private).",
+    )
+    ap.add_argument(
+        "--question",
+        type=str,
+        default=None,
+        help="Question to answer (used by --backend ollama; ignored in claude mode, where the "
+             "agent asks). If omitted, the ollama backend produces a summary.",
+    )
+    ap.add_argument(
+        "--ollama-model",
+        type=str,
+        default=None,
+        help="Ollama vision model for --backend ollama (default: mistral-small3.2:24b, "
+             "or WATCH_OLLAMA_MODEL from env).",
+    )
+    ap.add_argument(
+        "--ollama-max-images",
+        type=int,
+        default=None,
+        help="Max frames sent to the ollama model per request (default 8). Frames are evenly "
+             "sampled down to this many.",
     )
     args = ap.parse_args()
 
@@ -266,6 +296,55 @@ def main() -> int:
         print("[watch] no audio stream found — proceeding without transcription", file=sys.stderr)
 
     info = dl.get("info") or {}
+
+    # Ollama backend: answer locally from frames + transcript instead of handing frame
+    # paths to the agent. For batch / offline / private runs (e.g. corpus ingest).
+    if args.backend == "ollama":
+        import ollama_backend  # local sibling script
+        model = args.ollama_model or os.environ.get("WATCH_OLLAMA_MODEL") or ollama_backend.DEFAULT_MODEL
+        max_images = (
+            args.ollama_max_images if args.ollama_max_images is not None
+            else ollama_backend.DEFAULT_MAX_IMAGES
+        )
+        frame_paths = [f["path"] for f in frames]
+        print(
+            f"[watch] ollama backend: {model} — {len(frame_paths)} frame(s), "
+            f"up to {max_images} sent…",
+            file=sys.stderr,
+        )
+        answer = ollama_backend.answer_with_ollama(
+            frame_paths,
+            transcript_text,
+            question=args.question,
+            model=model,
+            max_images=max_images,
+        )
+        print()
+        print("# watch: video report")
+        print()
+        print(f"- **Source:** {args.source}")
+        if info.get("title"):
+            print(f"- **Title:** {info['title']}")
+        if info.get("uploader"):
+            print(f"- **Uploader:** {info['uploader']}")
+        print(f"- **Duration:** {format_time(full_duration)} ({full_duration:.1f}s)")
+        print(f"- **Backend:** ollama ({model})")
+        print(f"- **Frames analyzed:** {min(len(frame_paths), max_images)} of {len(frame_paths)}")
+        if transcript_segments:
+            print(
+                f"- **Transcript:** {len(transcript_segments)} segments "
+                f"(via {transcript_source or 'captions'})"
+            )
+        else:
+            print("- **Transcript:** none available")
+        print()
+        print("## Answer" if args.question else "## Summary")
+        print()
+        print(answer)
+        print()
+        print("---")
+        print(f"_Work dir: `{work}` — delete when done._")
+        return 0
 
     print()
     print("# watch: video report")

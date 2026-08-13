@@ -150,6 +150,25 @@ Optional flags:
 - `--whisper groq|openai` — force a specific Whisper backend (default: prefer Groq if both keys exist)
 - `--no-whisper` — disable the Whisper fallback entirely (frames-only if no captions)
 - `--no-dedup` — keep near-duplicate frames. By default a frame-delta pass drops frames that are visually near-identical to the previous kept one (held slides, static screen recordings, paused video) so the frame budget goes to distinct content; the report's **Frames** line notes how many were dropped. Pass this only if the user needs every sampled frame (e.g. judging subtle frame-to-frame motion).
+- `--backend claude|ollama` — comprehension backend (default `claude`). `claude` prints frame paths for you (the agent) to Read and reason over — best quality, interactive. `ollama` sends frames + transcript to a **local** Ollama vision model and prints its answer directly — for batch / offline / private runs (e.g. summarizing many videos into a corpus). See "Local comprehension backend" below.
+- `--question "..."` — the question to answer, used by `--backend ollama` (in `claude` mode you ask directly). Omit for a summary.
+- `--ollama-model NAME` — vision model for `--backend ollama` (default `mistral-small3.2:24b`, or `WATCH_OLLAMA_MODEL`). Must report `vision` in `ollama show`.
+- `--ollama-max-images N` — max frames sent per request (default 8; frames are evenly sampled down to this).
+
+### Local comprehension backend (Ollama)
+
+`--backend ollama` runs the *comprehension* step on a local Ollama vision model instead of handing frames to you. The download / frame / transcript pipeline is unchanged — only the final "answer from frames + transcript" step moves local. Use it for batch, offline, or privacy-sensitive work; keep the default `claude` backend for interactive analysis (higher quality, handles far more frames at once).
+
+- **Requires** a running Ollama (`ollama serve`, default `http://localhost:11434`, or `OLLAMA_HOST`) with a **vision** model pulled (e.g. `mistral-small3.2:24b`, `gemma4:12b`, `qwen3.5:27b` — anything that reports `vision` in `ollama show`). Ollama does **not** transcribe audio: captions or the Whisper fallback still produce the transcript.
+- **Slower and lower-capacity** than the hosted agent: local models process only a handful of frames well, so `--ollama-max-images` caps how many are sent. Prefer `--detail efficient`/`transcript` or a focused `--start/--end` window over dense full-video scans.
+- Prints a `## Answer` (with `--question`) or `## Summary` section instead of frame-Read instructions. Fails loud if Ollama is unreachable or the model is missing — never a silent empty answer.
+
+```bash
+# Local summary of a video into a corpus (no hosted model, no frames handed to the agent)
+python3 "${SKILL_DIR}/scripts/watch.py" "$URL" --detail efficient --backend ollama
+# Local Q&A with a specific model
+python3 "${SKILL_DIR}/scripts/watch.py" "$URL" --backend ollama --ollama-model mistral-small3.2:24b --question "What tool is shown and who is it for?"
+```
 
 ### Focusing on a section (higher frame rate)
 
