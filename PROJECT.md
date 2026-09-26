@@ -10,7 +10,7 @@
 - Needs `ffmpeg`/`ffprobe`/`yt-dlp` on PATH; on first run `setup.py` auto-installs the first two via `brew` (no sudo).
 - **YouTube requires the nightly `yt-dlp`** — Homebrew's stable (2026.07.04) returned "video unavailable" on every YouTube video; the pipx nightly (2026.08.04) fixed it. `~/.local/bin` (pipx) must win on PATH over `/opt/homebrew/bin` (brew) for the plugin to pick the working binary.
 - Per-source support = `yt-dlp`'s current extractor health. Verified working: local files, generic HTTP MP4, YouTube, Vimeo, Loom (Loom serves native captions). **`ted.com` is currently broken upstream in yt-dlp** — use the TED talk's YouTube link instead.
-- Whisper fallback (Groq/OpenAI) only fires when a video has no captions; needs a key in `~/.config/watch/.env` (mode 0600). Optional — `--no-whisper` runs frames-only.
+- Whisper fallback (Groq/OpenAI) only fires when a video has no captions; needs a Groq or OpenAI key. Keys belong in the key store (`~/.config/keys.env`, via `keys`), not a per-tool `.env`; the `watch` skill still writes `~/.config/watch/.env`, a fix listed in the 2026-09-25 config sweep. Optional — `--no-whisper` runs frames-only.
 
 **Key files:** `skills/watch/SKILL.md` (skill contract), `skills/watch/scripts/*.py` (watch.py orchestrator, download.py, frames.py, transcribe.py, whisper.py, setup.py, config.py), `hooks/` (standalone SessionStart status hook — **omitted** from the vendored copy), `CHANGELOG.md`
 
